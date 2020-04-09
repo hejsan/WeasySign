@@ -1,6 +1,4 @@
-import requests
 import base64
-import time
 import hashlib
 from .helpers import get_config, get_session, write_signature_placeholder, APIError, subject_dn_ as default_subject_dn, get_digest, pkcs11_aligned, write_stream_object
 from .selfsigned import cert2asn
@@ -14,12 +12,14 @@ from cryptography.hazmat import backends
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, utils
 from cryptography.hazmat.backends import default_backend
+from . import BaseSigner
 
 
-class GlobalSignSigner:
+class GlobalSignSigner(BaseSigner):
 
-    def __init__(self, cfg_file, subject_dn=None):
+    def __init__(self, cfg_file, keypass=None, subject_dn=None):
         self._ssl, self._api = get_config(cfg_file)
+        self._key_password = keypass or self._ssl['keypass']
         self._url = self._api.get('url') + self._api.get('endpoint')
         self._subject_dn = subject_dn or default_subject_dn
         self._login_url = self._url + '/login'
@@ -43,7 +43,7 @@ class GlobalSignSigner:
         with open(self._ssl['keyfile'], "rb") as key_file:
             private_key = serialization.load_pem_private_key(
                 key_file.read(),
-                password=self._ssl['password'].encode('utf-8'),
+                password=self._key_password.encode('utf-8'),
                 backend=default_backend()
             )
 

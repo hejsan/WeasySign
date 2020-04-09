@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='WeasySign',
-    version='52',  # Equal to the next version of WeasyPrint
+    version='0.1.0',
     description='Digital Signatures for WeasyPrint',
     url='https://github.com/hejsan/WeasySign',
     author='Bjarni Thorisson',

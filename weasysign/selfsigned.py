@@ -10,7 +10,7 @@ from cryptography.hazmat.backends import default_backend
 # TODO: support for approval, i.e. Enable approval signature for PDF incremental update
 from weasyprint.pdf import pdf_format
 from weasysign.helpers import pkcs11_aligned, write_signature_placeholder, get_digest
-
+from . import BaseSigner
 
 def cert2asn(cert, cert_bytes=True):
     if cert_bytes:
@@ -22,9 +22,7 @@ def cert2asn(cert, cert_bytes=True):
     return x509.Certificate.load(cert_bytes)
 
 
-
-
-class SelfSigner:
+class SelfSigner(BaseSigner):
 
     def __init__(self, cert, private_key):
         self.cert = cert
