@@ -125,9 +125,6 @@ class GlobalSignSigner(BaseSigner):
         ocsplist_number = dss_number + 2
         expected_next_object_number = dss_number + 3
         
-        params = b' /Version/1.7 /AcroForm <</Fields[%d 0 R] /SigFlags 3>>/DSS %d 0 R /Extensions<</ESIC <</BaseVersion/1.7/ExtensionLevel 1>>>>' % (pdf._signature_rect_number, dss_number)
-        pdf.extend_dict(pdf.catalog, params)
-
         dss = b'<</Certs %d 0 R/OCSPs %d 0 R>>' % (certlist_number, ocsplist_number)
         pdf.write_new_object(dss)
         
@@ -164,7 +161,19 @@ class GlobalSignSigner(BaseSigner):
         ocsp_numbers.append(write_stream_object(pdf, self._signing_ocsp_response_raw))
         assert ocsp_numbers == ocsp_list_numbers
 
-        self._document_timestamp(pdf, s)
+
+        # A Document Timestamp is required to be Pades LTV compliant
+        tsp_number, tsp_offset, len_to_content = self._document_timestamp_placeholder(pdf, s)
+
+        timestamp_annot = b'<</F 132/Type/Annot/Subtype/Widget/Rect[0 0 0 0]/FT/Sig/DR<<>>/T(doctsp)/P 2 0 R/V %d 0 R>>' % tsp_number
+        tsp_annot_number = pdf.write_new_object(timestamp_annot)
+        params = b' /Version/1.7 /AcroForm <</Fields[%d 0 R %d 0 R] /SigFlags 3>>/DSS %d 0 R /Extensions<</ESIC <</BaseVersion/1.7/ExtensionLevel 1>>>>' % (pdf._signature_rect_number, tsp_annot_number, dss_number)
+        pdf.extend_dict(pdf.catalog, params)
+
+        pdf.finish()  # This writes the trailer etc.
+
+        # Replace the timestamp placeholder
+        self._document_timestamp(pdf, s, tsp_offset, len_to_content)
 
     
     def _sign(self, datau, key, signing_cert, trustchain, hashalgo, attrs=True, signed_value=None, hsm=None, pss=False, timestampurl=None, identity=None, s=None):
@@ -318,13 +327,8 @@ class GlobalSignSigner(BaseSigner):
         return datas.dump()
 
 
-    def _document_timestamp(self, pdf, session):
-        from weasyprint.pdf import pdf_format
-        import os
-
+    def _document_timestamp_placeholder(self, pdf, session):
         byterange_placeholder = b'/ByteRange[0 ********** ********** **********]'
-        byterange_string = '/ByteRange[0 {} {} {}]'
-        byterange = [0, 0, 0, 0]
 
         tsp = b'<</Type /DocTimeStamp /Filter /Adobe.PPKLite /SubFilter /ETSI.RFC3161 /Contents <'
         len_to_content = len(tsp)
@@ -334,7 +338,16 @@ class GlobalSignSigner(BaseSigner):
         tsp_number = pdf.write_new_object(tsp)
         # Store the byte offset where the timestamp object starts
         tsp_offset = pdf.new_objects_offsets[-1]
-        pdf.finish()
+        return tsp_number, tsp_offset, len_to_content
+
+
+    def _document_timestamp(self, pdf, session, tsp_offset, len_to_content):
+        from weasyprint.pdf import pdf_format
+        import os
+
+        byterange_string = '/ByteRange[0 {} {} {}]'
+        byterange = [0, 0, 0, 0]
+
 
         fileobj = pdf.fileobj
         fileobj.seek(tsp_offset)
@@ -350,38 +363,23 @@ class GlobalSignSigner(BaseSigner):
         fileobj.write(byterange_final)
 
         tsp_digest = self._hash(pdf, byterange)
+
         r = session.get(self._timestamp_url.format(digest=tsp_digest.hex().upper()))
         if r.status_code != 200:
             raise APIError('Cannot retrieve the document timestamp: {}\n{}'.format(r.status_code, r.json()))
         timestamp_token = r.json()['token']
         timestamp_token = timestamp_token.encode('ascii')
         timestamp_token = base64.b64decode(timestamp_token)
-        #timestamp_token = pkcs11_aligned(timestamp_token)  # ocsp_resp.public_bytes(serialization.Encoding.DER))
+        timestamp_token = pkcs11_aligned(timestamp_token)  # ocsp_resp.public_bytes(serialization.Encoding.DER))
 
         fileobj.seek(tsp_offset)
         next(fileobj)  # Skip to object content line
         fileobj.seek(len_to_content, os.SEEK_CUR)
-        fileobj.write(timestamp_token)
+        fileobj.write(timestamp_token.encode('ascii'))
 
-        #tsp_dict = cms.ContentInfo.load(timestamp_token)
-        #tsp_attrs = [
-            #cms.CMSAttribute({
-                #'type': cms.CMSAttributeType('signature_time_stamp_token'),
-                #'values': cms.SetOfContentInfo([
-                    #cms.ContentInfo({
-                        #'content_type': cms.ContentType('signed_data'),
-                        #'content': tsp_dict['content'],  # adb_tsp_ext,  # tiii["time_stamp_token"]["content"],
-                    #})
-                #])
-            #})
-        #]
-        #datas['content']['signer_infos'][0]['unsigned_attrs'] = tsp_attrs
 
     def _hash(self, pdf, byterange):
         buf = pdf.fileobj.getbuffer()
-        with open('/tmp/digest.txt', "wb") as digest_file:
-            digest_file.write(buf[:byterange[1]])
-            digest_file.write(buf[byterange[2]:])
         # Get the digest
         hasher = hashlib.sha256()
         hasher.update(buf[:byterange[1]])

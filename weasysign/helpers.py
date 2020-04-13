@@ -100,9 +100,9 @@ def get_config(cfg_file):
     return config['SSL'], config['API']
 
 
-def get_session(url, certfile, keyfile, password=None):
+def get_session(url, certfile, keyfile, keypass=None):
     session = requests.Session()
-    adapter = SSLAdapter(certfile, keyfile, password)
+    adapter = SSLAdapter(certfile, keyfile, keypass)
     session.mount(url, adapter)
     #session.verify = False
     return session
