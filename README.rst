@@ -17,7 +17,8 @@ code to be neither elegant nor efficient quite yet. For example the helpers.py
 is a mess of various functions that should probably be made into a better 
 structure.
 
-WeasySign was written for the University of Iceland (https://www.hi.is).
+WeasySign was written by the Division of Information Technology at the
+University of Iceland (http://uts.hi.is).
 
 * Free software: BSD licensed
 * Python 3.5+
