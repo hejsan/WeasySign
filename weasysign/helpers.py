@@ -39,8 +39,8 @@ def write_signature_placeholder(pdf):
     date = date.strftime('%Y%m%d%H%M%S+00\'00\'')
 
     byterange_placeholder = b'/ByteRange[0 ********** ********** **********]'
-    #content = b'<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /ETSI.CAdES.detached '
-    content = b'<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /adbe.pkcs7.detached '
+    content = b'<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /ETSI.CAdES.detached '
+    #content = b'<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /adbe.pkcs7.detached '
     content += byterange_placeholder
     content += b' /M(D:%b)' % bytes(date.encode('latin1'))  # .$this->_datestring($sigobjid, $this->doc_modification_timestamp);
     content += b' /Contents<' + b'0' * signature_max_length + b'>'

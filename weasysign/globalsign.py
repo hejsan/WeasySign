@@ -47,13 +47,6 @@ class GlobalSignSigner(BaseSigner):
                 backend=default_backend()
             )
 
-        org_cert = None
-        with open(self._ssl['certfile'], "rb") as cert_file:
-            org_cert = cryptox509.load_pem_x509_certificate(
-                cert_file.read(), 
-                default_backend()
-            )
-
 
         # Login in and get the access token
         r = s.post(self._login_url,
@@ -181,6 +174,8 @@ class GlobalSignSigner(BaseSigner):
             signed_value = getattr(hashlib, hashalgo)(datau).digest()
         signed_time = datetime.datetime.now(tz=util.timezone.utc)
 
+        esscert = signing_cert.public_bytes(serialization.Encoding.DER)
+        esscert = getattr(hashlib, hashalgo)(esscert).digest()
         if hsm is not None:
             keyid, cert = hsm.certificate()
             cert = cert2asn(cert, False)
@@ -217,6 +212,14 @@ class GlobalSignSigner(BaseSigner):
                         'type': cms.CMSAttributeType('message_digest'),
                         'values': (signed_value,),
                     }),
+                    cms.CMSAttribute({
+                        'type': cms.CMSAttributeType('signing_certificate_v2'),
+                        'values': (
+                            tsp.SigningCertificateV2({
+                                'certs': [tsp.ESSCertIDv2({'cert_hash': esscert}),]
+                            }),
+                        )
+                    })
                     #cms.CMSAttribute({
                         #'type': cms.CMSAttributeType('signing_time'),
                         #'values': (cms.Time({'utc_time': core.UTCTime(signed_time)}),)
